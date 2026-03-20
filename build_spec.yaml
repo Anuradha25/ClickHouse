@@ -1,15 +1,13 @@
 version: 0.1
 component: build
-timeoutInSeconds: 28800
+timeoutInSeconds: 43200
 shell: bash
 failImmediatelyOnError: true
 
 env:
   variables:
     SUBMODULE_JOBS: "16"
-    BUILD_JOBS: "4"
     LOCAL_IMAGE_TAG: "clickhouse-source-local:ci"
-    BUILDER_IMAGE: "docker.io/clickhouse/binary-builder:5125aa55896d38e8e72b"
   exportedVariables:
     - IMAGE_TAG
 
@@ -31,41 +29,32 @@ steps:
       dnf -y install \
         git \
         podman \
+        python3 \
         which \
         tar \
         xz
 
   - type: Command
-    name: "Build ClickHouse binary in builder image and package runtime image"
+    name: "Build ClickHouse from source via Praktika"
     command: |
       set -euxo pipefail
-
       podman system prune -af || true
-      podman pull "${BUILDER_IMAGE}"
 
-      podman run --rm \
-        -v "$PWD":/ClickHouse \
-        -w /ClickHouse \
-        "${BUILDER_IMAGE}" \
-        bash -lc '
-          set -euxo pipefail
-          clang --version
-          CLANG_MAJOR="$(clang --version | sed -n "1s/.*version \([0-9][0-9]*\).*/\1/p")"
-          if [ -z "$CLANG_MAJOR" ] || [ "$CLANG_MAJOR" -lt 21 ]; then
-            echo "ERROR: clang >= 21 required, got:"
-            clang --version
-            exit 1
-          fi
+      # Uses ClickHouse's own CI build recipe/toolchain
+      python3 -m ci.praktika run "Build (amd_release)"
 
-          rm -rf build
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DENABLE_TESTS=OFF \
-            -DENABLE_UTILS=OFF \
-            -DENABLE_RUST=OFF
-          ninja -C build -j '"${BUILD_JOBS}"' clickhouse
-        '
+      # Locate produced clickhouse binary
+      test -x ci/tmp/build/programs/clickhouse || test -x build/programs/clickhouse
 
+      if [ -x ci/tmp/build/programs/clickhouse ]; then
+        mkdir -p build/programs
+        cp -f ci/tmp/build/programs/clickhouse build/programs/clickhouse
+      fi
+
+  - type: Command
+    name: "Package runtime image"
+    command: |
+      set -euxo pipefail
       podman build \
         --format docker \
         --pull=always \
