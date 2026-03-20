@@ -37,6 +37,8 @@ steps:
       #   --build-arg ENABLE_UTILS=OFF \
       #   --build-arg ENABLE_RUST=OFF \
       #   .
+      podman info
+      podman run --rm ubuntu:24.04 bash -lc 'echo memory.max=$(cat /sys/fs/cgroup/memory.max); free -h'
       podman build \
         --memory=48g \
         --memory-swap=48g \
