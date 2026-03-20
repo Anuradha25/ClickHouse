@@ -23,27 +23,30 @@ steps:
       export IMAGE_TAG
       echo "IMAGE_TAG=${IMAGE_TAG}"
 
-  - type: Command
-    name: "Build ClickHouse image from source with Podman"
-    command: |
-      set -euxo pipefail
-      podman --version
-      podman system prune -af || true
-      podman builder prune -af || true
-      podman info
-      podman run --rm ubuntu:24.04 bash -lc 'echo memory.max=$(cat /sys/fs/cgroup/memory.max); free -h'
-      podman build \
-        --memory=48g \
-        --memory-swap=48g \
-        --format docker \
-        --pull=always \
-        -f Dockerfile.oci \
-        -t "${LOCAL_IMAGE_TAG}" \
-        --build-arg BUILD_JOBS="${BUILD_JOBS}" \
-        --build-arg ENABLE_TESTS=OFF \
-        --build-arg ENABLE_UTILS=OFF \
-        --build-arg ENABLE_RUST=OFF \
-        .
+- type: Command
+  name: "Build ClickHouse binary and image"
+  command: |
+    set -euxo pipefail
+
+    # Build binary directly in workspace
+    cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_C_COMPILER=clang \
+      -DCMAKE_CXX_COMPILER=clang++ \
+      -DENABLE_TESTS=OFF \
+      -DENABLE_UTILS=OFF \
+      -DENABLE_RUST=OFF
+    ninja -C build -j "${BUILD_JOBS}" clickhouse
+
+    # Build small runtime image
+    podman system prune -af || true
+    podman build \
+      --format docker \
+      --pull=always \
+      -f Dockerfile.runtime \
+      -t "${LOCAL_IMAGE_TAG}" \
+      .
+
 
 outputArtifacts:
   - name: clickhouse-source-image
