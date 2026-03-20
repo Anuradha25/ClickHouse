@@ -1,44 +1,4 @@
-# syntax=docker/dockerfile:1
-FROM ubuntu:24.04 AS builder
-
-ARG DEBIAN_FRONTEND=noninteractive
-ARG BUILD_JOBS=4
-ARG ENABLE_TESTS=OFF
-ARG ENABLE_UTILS=OFF
-ARG ENABLE_RUST=OFF
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    ccache \
-    clang \
-    cmake \
-    curl \
-    gawk \
-    git \
-    lld \
-    nasm \
-    ninja-build \
-    perl \
-    pkg-config \
-    python3 \
-    yasm \
- && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /src
-COPY . .
-
-RUN test -f contrib/sysroot/README.md
-
-RUN cmake -S . -B build -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER=clang \
-    -DCMAKE_CXX_COMPILER=clang++ \
-    -DENABLE_TESTS=${ENABLE_TESTS} \
-    -DENABLE_UTILS=${ENABLE_UTILS} \
-    -DENABLE_RUST=${ENABLE_RUST} \
- && ninja -C build -j "${BUILD_JOBS}" clickhouse
-
-FROM ubuntu:22.04 AS runtime
+FROM ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG CLICKHOUSE_UID=101
@@ -51,7 +11,7 @@ RUN groupadd -r clickhouse --gid="${CLICKHOUSE_GID}" \
  && busybox --install -s \
  && rm -rf /var/lib/apt/lists/* /var/cache/debconf /tmp/*
 
-COPY --from=builder /src/build/programs/clickhouse /tmp/clickhouse_binary/clickhouse
+COPY build/programs/clickhouse /tmp/clickhouse_binary/clickhouse
 COPY docker/server/entrypoint.sh /entrypoint.sh
 COPY docker/server/docker_related_config.xml /etc/clickhouse-server/config.d/docker_related_config.xml
 
@@ -70,6 +30,5 @@ ENV CLICKHOUSE_CONFIG=/etc/clickhouse-server/config.xml
 WORKDIR /var/lib/clickhouse
 EXPOSE 8123 9000 9009
 VOLUME /var/lib/clickhouse
-
 ENTRYPOINT ["/entrypoint.sh"]
 CMD []
