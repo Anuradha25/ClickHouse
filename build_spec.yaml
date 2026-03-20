@@ -1,0 +1,44 @@
+version: 0.1
+component: build
+timeoutInSeconds: 28800
+shell: bash
+failImmediatelyOnError: true
+
+env:
+  variables:
+    SUBMODULE_JOBS: "16"
+    BUILD_JOBS: "6"
+    LOCAL_IMAGE_TAG: "clickhouse-source-local:ci"
+  exportedVariables:
+    - IMAGE_TAG
+
+steps:
+  - type: Command
+    name: "Prepare source and submodules"
+    command: |
+      set -euxo pipefail
+      git submodule sync
+      git submodule update --init --jobs "${SUBMODULE_JOBS}"
+      IMAGE_TAG="$(echo "${OCI_PRIMARY_SOURCE_COMMIT_HASH:-$OCI_BUILD_RUN_ID}" | cut -c1-12)"
+      export IMAGE_TAG
+      echo "IMAGE_TAG=${IMAGE_TAG}"
+
+  - type: Command
+    name: "Build ClickHouse image from source with Podman"
+    command: |
+      set -euxo pipefail
+      podman --version
+      podman build \
+        --pull=always \
+        -f Dockerfile.oci \
+        -t "${LOCAL_IMAGE_TAG}" \
+        --build-arg BUILD_JOBS="${BUILD_JOBS}" \
+        --build-arg ENABLE_TESTS=OFF \
+        --build-arg ENABLE_UTILS=OFF \
+        --build-arg ENABLE_RUST=OFF \
+        .
+
+outputArtifacts:
+  - name: clickhouse-source-image
+    type: DOCKER_IMAGE
+    location: clickhouse-source-local:ci
