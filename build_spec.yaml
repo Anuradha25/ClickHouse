@@ -42,6 +42,7 @@ steps:
       podman build \
         --memory=48g \
         --memory-swap=48g \
+        --format docker \
         --pull=always \
         -f Dockerfile.oci \
         -t "${LOCAL_IMAGE_TAG}" \
