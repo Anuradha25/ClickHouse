@@ -16,9 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
  && rm -rf /var/lib/apt/lists/*
 
-RUN wget -O /tmp/llvm.sh https://apt.llvm.org/llvm.sh \
+RUN env -u OPENSSL_CONF -u OPENSSL_MODULES \
+    curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh \
  && chmod +x /tmp/llvm.sh \
- && /tmp/llvm.sh "${LLVM_VERSION}" \
+ && env -u OPENSSL_CONF -u OPENSSL_MODULES /tmp/llvm.sh "${LLVM_VERSION}" \
  && rm -f /tmp/llvm.sh
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
