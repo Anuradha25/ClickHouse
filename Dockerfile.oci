@@ -2,29 +2,26 @@
 FROM ubuntu:24.04 AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG LLVM_VERSION=21
-ARG BUILD_JOBS=6
+ARG BUILD_JOBS=4
 ARG ENABLE_TESTS=OFF
 ARG ENABLE_UTILS=OFF
 ARG ENABLE_RUST=OFF
 
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ccache \
+    clang \
+    cmake \
     curl \
-    gnupg \
-    wget \
- && rm -rf /var/lib/apt/lists/*
-
-RUN env -u OPENSSL_CONF -u OPENSSL_MODULES \
-    curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh \
- && chmod +x /tmp/llvm.sh \
- && env -u OPENSSL_CONF -u OPENSSL_MODULES /tmp/llvm.sh "${LLVM_VERSION}" \
- && rm -f /tmp/llvm.sh
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential ccache clang-"${LLVM_VERSION}" cmake gawk git \
-    lld-"${LLVM_VERSION}" nasm ninja-build perl pkg-config python3 yasm \
+    gawk \
+    git \
+    lld \
+    nasm \
+    ninja-build \
+    perl \
+    pkg-config \
+    python3 \
+    yasm \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -34,8 +31,8 @@ RUN test -f contrib/sysroot/README.md
 
 RUN cmake -S . -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER=clang-${LLVM_VERSION} \
-    -DCMAKE_CXX_COMPILER=clang++-${LLVM_VERSION} \
+    -DCMAKE_C_COMPILER=clang \
+    -DCMAKE_CXX_COMPILER=clang++ \
     -DENABLE_TESTS=${ENABLE_TESTS} \
     -DENABLE_UTILS=${ENABLE_UTILS} \
     -DENABLE_RUST=${ENABLE_RUST} \
@@ -46,8 +43,6 @@ FROM ubuntu:22.04 AS runtime
 ARG DEBIAN_FRONTEND=noninteractive
 ARG CLICKHOUSE_UID=101
 ARG CLICKHOUSE_GID=101
-
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN groupadd -r clickhouse --gid="${CLICKHOUSE_GID}" \
  && useradd -r -g clickhouse --uid="${CLICKHOUSE_UID}" --home-dir=/var/lib/clickhouse --shell=/bin/bash clickhouse \
