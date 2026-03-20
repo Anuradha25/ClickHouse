@@ -9,6 +9,7 @@ env:
     SUBMODULE_JOBS: "16"
     BUILD_JOBS: "4"
     LOCAL_IMAGE_TAG: "clickhouse-source-local:ci"
+    BUILDER_IMAGE: "docker.io/clickhouse/binary-builder:5125aa55896d38e8e72b"
   exportedVariables:
     - IMAGE_TAG
 
@@ -40,30 +41,28 @@ steps:
       set -euxo pipefail
 
       podman system prune -af || true
-      podman pull docker.io/clickhouse/binary-builder:latest-amd64
+      podman pull "${BUILDER_IMAGE}"
 
       podman run --rm \
         -v "$PWD":/ClickHouse \
         -w /ClickHouse \
-        docker.io/clickhouse/binary-builder:latest-amd64 \
+        "${BUILDER_IMAGE}" \
         bash -lc '
           set -euxo pipefail
-          rm -rf build
+          clang --version
+          CLANG_MAJOR="$(clang --version | sed -n "1s/.*version \([0-9][0-9]*\).*/\1/p")"
+          if [ -z "$CLANG_MAJOR" ] || [ "$CLANG_MAJOR" -lt 21 ]; then
+            echo "ERROR: clang >= 21 required, got:"
+            clang --version
+            exit 1
+          fi
 
+          rm -rf build
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_TESTS=OFF \
             -DENABLE_UTILS=OFF \
-            -DENABLE_RUST=OFF \
-          || {
-            echo "=== CMakeError.log ==="
-            test -f build/CMakeFiles/CMakeError.log && cat build/CMakeFiles/CMakeError.log || true
-            echo "=== CMakeOutput.log ==="
-            test -f build/CMakeFiles/CMakeOutput.log && cat build/CMakeFiles/CMakeOutput.log || true
-            exit 1
-          }
-
-          test -f build/build.ninja
+            -DENABLE_RUST=OFF
           ninja -C build -j '"${BUILD_JOBS}"' clickhouse
         '
 
