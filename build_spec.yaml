@@ -24,41 +24,35 @@ steps:
       echo "IMAGE_TAG=${IMAGE_TAG}"
 
   - type: Command
-    name: "Install build dependencies"
+    name: "Install host dependencies"
     command: |
       set -euxo pipefail
       dnf -y install \
-        cmake \
-        clang \
-        lld \
-        gcc \
-        gcc-c++ \
         git \
-        make \
-        ccache \
-        python3 \
-        perl \
-        gawk \
+        podman \
         which \
         tar \
         xz
 
   - type: Command
-    name: "Build ClickHouse binary and package image"
+    name: "Build ClickHouse binary in builder image and package runtime image"
     command: |
       set -euxo pipefail
 
-      cmake -S . -B build \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_C_COMPILER=clang \
-        -DCMAKE_CXX_COMPILER=clang++ \
-        -DENABLE_TESTS=OFF \
-        -DENABLE_UTILS=OFF \
-        -DENABLE_RUST=OFF
-
-      cmake --build build -j "${BUILD_JOBS}" --target clickhouse
-
       podman system prune -af || true
+
+      podman run --rm \
+        -v "$PWD":/ClickHouse \
+        -w /ClickHouse \
+        docker.io/clickhouse/binary-builder:head \
+        bash -lc '
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_TESTS=OFF \
+            -DENABLE_UTILS=OFF \
+            -DENABLE_RUST=OFF
+          ninja -C build -j '"${BUILD_JOBS}"' clickhouse
+        '
 
       podman build \
         --format docker \
