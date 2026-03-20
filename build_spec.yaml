@@ -7,7 +7,7 @@ failImmediatelyOnError: true
 env:
   variables:
     SUBMODULE_JOBS: "16"
-    BUILD_JOBS: "6"
+    BUILD_JOBS: "4"
     LOCAL_IMAGE_TAG: "clickhouse-source-local:ci"
   exportedVariables:
     - IMAGE_TAG
@@ -28,7 +28,18 @@ steps:
     command: |
       set -euxo pipefail
       podman --version
+      # podman build \
+      #   --pull=always \
+      #   -f Dockerfile.oci \
+      #   -t "${LOCAL_IMAGE_TAG}" \
+      #   --build-arg BUILD_JOBS="${BUILD_JOBS}" \
+      #   --build-arg ENABLE_TESTS=OFF \
+      #   --build-arg ENABLE_UTILS=OFF \
+      #   --build-arg ENABLE_RUST=OFF \
+      #   .
       podman build \
+        --memory=48g \
+        --memory-swap=48g \
         --pull=always \
         -f Dockerfile.oci \
         -t "${LOCAL_IMAGE_TAG}" \
