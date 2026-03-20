@@ -1,0 +1,4 @@
+.git
+build
+ci/tmp
+**/.DS_Store
