@@ -41,10 +41,13 @@ steps:
 
       podman system prune -af || true
 
+      # Pull a smaller explicit arch-tagged builder image first.
+      podman pull docker.io/clickhouse/binary-builder:latest-amd64
+
       podman run --rm \
         -v "$PWD":/ClickHouse \
         -w /ClickHouse \
-        docker.io/clickhouse/binary-builder:latest \
+        docker.io/clickhouse/binary-builder:latest-amd64 \
         bash -lc '
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
