@@ -1,4 +1,16 @@
 .git
+.github
 build
+build_*
+cmake-build-*
 ci/tmp
+tests
+docs
+debian
+docker
+benchmark
+programs
+utils
+contrib/*/.git
 **/.DS_Store
+
