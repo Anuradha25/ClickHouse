@@ -23,30 +23,29 @@ steps:
       export IMAGE_TAG
       echo "IMAGE_TAG=${IMAGE_TAG}"
 
-- type: Command
-  name: "Build ClickHouse binary and image"
-  command: |
-    set -euxo pipefail
+  - type: Command
+    name: "Build ClickHouse binary and package image"
+    command: |
+      set -euxo pipefail
 
-    # Build binary directly in workspace
-    cmake -S . -B build -G Ninja \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_C_COMPILER=clang \
-      -DCMAKE_CXX_COMPILER=clang++ \
-      -DENABLE_TESTS=OFF \
-      -DENABLE_UTILS=OFF \
-      -DENABLE_RUST=OFF
-    ninja -C build -j "${BUILD_JOBS}" clickhouse
+      cmake -S . -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
+        -DENABLE_TESTS=OFF \
+        -DENABLE_UTILS=OFF \
+        -DENABLE_RUST=OFF
 
-    # Build small runtime image
-    podman system prune -af || true
-    podman build \
-      --format docker \
-      --pull=always \
-      -f Dockerfile.runtime \
-      -t "${LOCAL_IMAGE_TAG}" \
-      .
+      ninja -C build -j "${BUILD_JOBS}" clickhouse
 
+      podman system prune -af || true
+
+      podman build \
+        --format docker \
+        --pull=always \
+        -f Dockerfile.runtime \
+        -t "${LOCAL_IMAGE_TAG}" \
+        .
 
 outputArtifacts:
   - name: clickhouse-source-image
