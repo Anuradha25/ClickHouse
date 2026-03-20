@@ -24,6 +24,29 @@ steps:
       echo "IMAGE_TAG=${IMAGE_TAG}"
 
   - type: Command
+    name: "Install build dependencies"
+    command: |
+      set -euxo pipefail
+      dnf -y install \
+        cmake \
+        ninja-build \
+        clang \
+        lld \
+        gcc \
+        gcc-c++ \
+        git \
+        make \
+        ccache \
+        python3 \
+        perl \
+        gawk \
+        nasm \
+        yasm \
+        which \
+        tar \
+        xz
+
+  - type: Command
     name: "Build ClickHouse binary and package image"
     command: |
       set -euxo pipefail
