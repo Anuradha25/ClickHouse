@@ -44,7 +44,7 @@ steps:
       podman run --rm \
         -v "$PWD":/ClickHouse \
         -w /ClickHouse \
-        docker.io/clickhouse/binary-builder:head \
+        docker.io/clickhouse/binary-builder:latest \
         bash -lc '
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
