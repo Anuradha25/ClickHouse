@@ -29,7 +29,6 @@ steps:
       set -euxo pipefail
       dnf -y install \
         cmake \
-        ninja-build \
         clang \
         lld \
         gcc \
@@ -40,8 +39,6 @@ steps:
         python3 \
         perl \
         gawk \
-        nasm \
-        yasm \
         which \
         tar \
         xz
@@ -51,7 +48,7 @@ steps:
     command: |
       set -euxo pipefail
 
-      cmake -S . -B build -G Ninja \
+      cmake -S . -B build \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_COMPILER=clang \
         -DCMAKE_CXX_COMPILER=clang++ \
@@ -59,7 +56,7 @@ steps:
         -DENABLE_UTILS=OFF \
         -DENABLE_RUST=OFF
 
-      ninja -C build -j "${BUILD_JOBS}" clickhouse
+      cmake --build build -j "${BUILD_JOBS}" --target clickhouse
 
       podman system prune -af || true
 
