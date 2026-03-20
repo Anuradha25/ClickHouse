@@ -40,8 +40,6 @@ steps:
       set -euxo pipefail
 
       podman system prune -af || true
-
-      # Pull a smaller explicit arch-tagged builder image first.
       podman pull docker.io/clickhouse/binary-builder:latest-amd64
 
       podman run --rm \
@@ -49,11 +47,23 @@ steps:
         -w /ClickHouse \
         docker.io/clickhouse/binary-builder:latest-amd64 \
         bash -lc '
+          set -euxo pipefail
+          rm -rf build
+
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_TESTS=OFF \
             -DENABLE_UTILS=OFF \
-            -DENABLE_RUST=OFF
+            -DENABLE_RUST=OFF \
+          || {
+            echo "=== CMakeError.log ==="
+            test -f build/CMakeFiles/CMakeError.log && cat build/CMakeFiles/CMakeError.log || true
+            echo "=== CMakeOutput.log ==="
+            test -f build/CMakeFiles/CMakeOutput.log && cat build/CMakeFiles/CMakeOutput.log || true
+            exit 1
+          }
+
+          test -f build/build.ninja
           ninja -C build -j '"${BUILD_JOBS}"' clickhouse
         '
 
