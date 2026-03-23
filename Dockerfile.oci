@@ -3,7 +3,6 @@
 FROM ubuntu:24.04 AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG LLVM_VERSION=19
 ARG BUILD_TYPE=RelWithDebInfo
 ARG BUILD_TARGET=clickhouse
 ARG BUILD_JOBS=4
@@ -12,30 +11,23 @@ ARG ENABLE_UTILS=OFF
 ARG ENABLE_RUST=OFF
 ARG EXTRA_CMAKE_ARGS=""
 
+ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
-    gnupg \
-    lsb-release \
-    software-properties-common \
     wget \
  && rm -rf /var/lib/apt/lists/*
-
-RUN wget -O /tmp/llvm.sh https://apt.llvm.org/llvm.sh \
- && chmod +x /tmp/llvm.sh \
- && /tmp/llvm.sh "${LLVM_VERSION}" \
- && rm -f /tmp/llvm.sh
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ccache \
-    clang-"${LLVM_VERSION}" \
+    clang \
     cmake \
     gawk \
     git \
-    lld-"${LLVM_VERSION}" \
+    lld \
     nasm \
     ninja-build \
     perl \
@@ -53,8 +45,8 @@ RUN jobs="${BUILD_JOBS}"; \
     if [ "${jobs}" = "0" ]; then jobs="$(nproc)"; fi; \
     cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-      -DCMAKE_C_COMPILER="clang-${LLVM_VERSION}" \
-      -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
+      -DCMAKE_C_COMPILER="clang" \
+      -DCMAKE_CXX_COMPILER="clang++" \
       -DENABLE_TESTS="${ENABLE_TESTS}" \
       -DENABLE_UTILS="${ENABLE_UTILS}" \
       -DENABLE_RUST="${ENABLE_RUST}" \
@@ -71,6 +63,7 @@ ARG IMAGE_SOURCE=""
 ARG IMAGE_REVISION=""
 ARG IMAGE_CREATED=""
 
+ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN groupadd -r clickhouse --gid="${CLICKHOUSE_GID}" \
