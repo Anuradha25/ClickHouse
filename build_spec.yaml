@@ -7,7 +7,9 @@ failImmediatelyOnError: true
 env:
   variables:
     SUBMODULE_JOBS: "16"
+    BUILD_JOBS: "4"
     LOCAL_IMAGE_TAG: "clickhouse-source-local:ci"
+    BUILDER_IMAGE: "docker.io/clickhouse/binary-builder:5125aa55896d38e8e72b"
   exportedVariables:
     - IMAGE_TAG
 
@@ -29,27 +31,35 @@ steps:
       dnf -y install \
         git \
         podman \
-        python3 \
         which \
         tar \
         xz
 
   - type: Command
-    name: "Build ClickHouse from source via Praktika"
+    name: "Build ClickHouse binary in builder image"
     command: |
       set -euxo pipefail
-      podman system prune -af || true
 
-      # Uses ClickHouse's own CI build recipe/toolchain
-      python3 -m ci.praktika run "Build (amd_release)"
+      podman system prune -af --volumes || true
+      podman pull "${BUILDER_IMAGE}"
 
-      # Locate produced clickhouse binary
-      test -x ci/tmp/build/programs/clickhouse || test -x build/programs/clickhouse
+      podman run --rm \
+        -v "$PWD":/ClickHouse \
+        -w /ClickHouse \
+        "${BUILDER_IMAGE}" \
+        bash -lc '
+          set -euxo pipefail
+          clang --version
+          rm -rf build
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_TESTS=OFF \
+            -DENABLE_UTILS=OFF \
+            -DENABLE_RUST=OFF
+          ninja -C build -j '"${BUILD_JOBS}"' clickhouse
+        '
 
-      if [ -x ci/tmp/build/programs/clickhouse ]; then
-        mkdir -p build/programs
-        cp -f ci/tmp/build/programs/clickhouse build/programs/clickhouse
-      fi
+      test -x build/programs/clickhouse
 
   - type: Command
     name: "Package runtime image"
