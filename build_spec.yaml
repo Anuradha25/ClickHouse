@@ -8,8 +8,8 @@ env:
   variables:
     SUBMODULE_JOBS: "16"
     BUILD_JOBS: "4"
+    BUILD_FORMAT: "docker"
     LOCAL_IMAGE_TAG: "clickhouse-source-local:ci"
-    BUILDER_IMAGE: "docker.io/clickhouse/binary-builder:5125aa55896d38e8e72b"
   exportedVariables:
     - IMAGE_TAG
 
@@ -18,8 +18,8 @@ steps:
     name: "Prepare source and submodules"
     command: |
       set -euxo pipefail
-      git submodule sync
-      git submodule update --init --jobs "${SUBMODULE_JOBS}"
+      git submodule sync --recursive
+      git submodule update --init --recursive --jobs "${SUBMODULE_JOBS}"
       IMAGE_TAG="$(echo "${OCI_PRIMARY_SOURCE_COMMIT_HASH:-$OCI_BUILD_RUN_ID}" | cut -c1-12)"
       export IMAGE_TAG
       echo "IMAGE_TAG=${IMAGE_TAG}"
@@ -28,48 +28,31 @@ steps:
     name: "Install host dependencies"
     command: |
       set -euxo pipefail
-      dnf -y install \
-        git \
-        podman \
-        which \
-        tar \
-        xz
+      dnf -y install git podman tar xz which
 
   - type: Command
-    name: "Build ClickHouse binary in builder image"
+    name: "Build ClickHouse image from source"
     command: |
       set -euxo pipefail
+
+      IMAGE_SOURCE="$(git config --get remote.origin.url || true)"
+      IMAGE_REVISION="$(git rev-parse HEAD || true)"
+      IMAGE_CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
       podman system prune -af --volumes || true
-      podman pull "${BUILDER_IMAGE}"
 
-      podman run --rm \
-        -v "$PWD":/ClickHouse \
-        -w /ClickHouse \
-        "${BUILDER_IMAGE}" \
-        bash -lc '
-          set -euxo pipefail
-          clang --version
-          rm -rf build
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DENABLE_TESTS=OFF \
-            -DENABLE_UTILS=OFF \
-            -DENABLE_RUST=OFF
-          ninja -C build -j '"${BUILD_JOBS}"' clickhouse
-        '
-
-      test -x build/programs/clickhouse
-
-  - type: Command
-    name: "Package runtime image"
-    command: |
-      set -euxo pipefail
       podman build \
-        --format docker \
+        --format "${BUILD_FORMAT}" \
         --pull=always \
-        -f Dockerfile.runtime \
+        -f Dockerfile.oci \
         -t "${LOCAL_IMAGE_TAG}" \
+        --build-arg BUILD_JOBS="${BUILD_JOBS}" \
+        --build-arg ENABLE_TESTS=OFF \
+        --build-arg ENABLE_UTILS=OFF \
+        --build-arg ENABLE_RUST=OFF \
+        --build-arg IMAGE_SOURCE="${IMAGE_SOURCE}" \
+        --build-arg IMAGE_REVISION="${IMAGE_REVISION}" \
+        --build-arg IMAGE_CREATED="${IMAGE_CREATED}" \
         .
 
 outputArtifacts:
