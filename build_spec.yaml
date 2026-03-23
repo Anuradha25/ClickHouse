@@ -1,108 +1,62 @@
-# syntax=docker/dockerfile:1
+version: 0.1
+component: build
+timeoutInSeconds: 24000
+shell: bash
+failImmediatelyOnError: true
 
-FROM ubuntu:24.04 AS builder
+env:
+  variables:
+    SUBMODULE_JOBS: "16"
+    BUILD_JOBS: "4"
+    BUILD_FORMAT: "docker"
+    LOCAL_IMAGE_TAG: "clickhouse-source-local:ci"
+  exportedVariables:
+    - IMAGE_TAG
 
-ARG DEBIAN_FRONTEND=noninteractive
-ARG BUILD_TYPE=RelWithDebInfo
-ARG BUILD_TARGET=clickhouse
-ARG BUILD_JOBS=4
-ARG ENABLE_TESTS=OFF
-ARG ENABLE_UTILS=OFF
-ARG ENABLE_RUST=OFF
-ARG EXTRA_CMAKE_ARGS=""
+steps:
+  - type: Command
+    name: "Prepare source and submodules"
+    command: |
+      set -euxo pipefail
+      git submodule sync --recursive
+      git submodule update --init --recursive --jobs "${SUBMODULE_JOBS}"
+      IMAGE_TAG="$(echo "${OCI_PRIMARY_SOURCE_COMMIT_HASH:-$OCI_BUILD_RUN_ID}" | cut -c1-12)"
+      export IMAGE_TAG
+      echo "IMAGE_TAG=${IMAGE_TAG}"
 
-ENV DEBIAN_FRONTEND=noninteractive
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+  - type: Command
+    name: "Install host dependencies"
+    command: |
+      set -euxo pipefail
+      dnf -y install git podman tar xz which
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    wget \
- && rm -rf /var/lib/apt/lists/*
+  - type: Command
+    name: "Build ClickHouse image from source"
+    command: |
+      set -euxo pipefail
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    ccache \
-    clang \
-    cmake \
-    gawk \
-    git \
-    lld \
-    nasm \
-    ninja-build \
-    perl \
-    pkg-config \
-    python3 \
-    yasm \
- && rm -rf /var/lib/apt/lists/*
+      IMAGE_SOURCE="$(git config --get remote.origin.url || true)"
+      IMAGE_REVISION="$(git rev-parse HEAD || true)"
+      IMAGE_CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-WORKDIR /src
-COPY . .
+      podman system prune -af --volumes || true
 
-RUN test -f contrib/sysroot/README.md
+      podman build \
+        --format "${BUILD_FORMAT}" \
+        --pull=always \
+        -f Dockerfile.oci \
+        -t "${LOCAL_IMAGE_TAG}" \
+        --build-arg DEBIAN_FRONTEND=noninteractive \
+        --build-arg BUILD_JOBS="${BUILD_JOBS}" \
+        --build-arg ENABLE_TESTS=OFF \
+        --build-arg ENABLE_UTILS=OFF \
+        --build-arg ENABLE_RUST=OFF \
+        --build-arg IMAGE_SOURCE="${IMAGE_SOURCE}" \
+        --build-arg IMAGE_REVISION="${IMAGE_REVISION}" \
+        --build-arg IMAGE_CREATED="${IMAGE_CREATED}" \
+        .
 
-RUN jobs="${BUILD_JOBS}"; \
-    if [ "${jobs}" = "0" ]; then jobs="$(nproc)"; fi; \
-    cmake -S . -B build -G Ninja \
-      -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-      -DCMAKE_C_COMPILER="clang" \
-      -DCMAKE_CXX_COMPILER="clang++" \
-      -DENABLE_TESTS="${ENABLE_TESTS}" \
-      -DENABLE_UTILS="${ENABLE_UTILS}" \
-      -DENABLE_RUST="${ENABLE_RUST}" \
-      ${EXTRA_CMAKE_ARGS} && \
-    ninja -C build -j "${jobs}" "${BUILD_TARGET}" && \
-    test -x /src/build/programs/clickhouse
-
-FROM ubuntu:24.04 AS runtime
-
-ARG DEBIAN_FRONTEND=noninteractive
-ARG CLICKHOUSE_UID=101
-ARG CLICKHOUSE_GID=101
-ARG IMAGE_SOURCE=""
-ARG IMAGE_REVISION=""
-ARG IMAGE_CREATED=""
-
-ENV DEBIAN_FRONTEND=noninteractive
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
-RUN groupadd -r clickhouse --gid="${CLICKHOUSE_GID}" \
- && useradd -r -g clickhouse --uid="${CLICKHOUSE_UID}" --home-dir=/var/lib/clickhouse --shell=/bin/bash clickhouse \
- && apt-get update \
- && apt-get install --yes --no-install-recommends \
-    busybox \
-    ca-certificates \
-    locales \
-    tzdata \
-    wget \
- && busybox --install -s \
- && rm -rf /var/lib/apt/lists/* /var/cache/debconf /tmp/*
-
-COPY --from=builder /src/build/programs/clickhouse /tmp/clickhouse_binary/clickhouse
-COPY docker/server/entrypoint.sh /entrypoint.sh
-COPY docker/server/docker_related_config.xml /etc/clickhouse-server/config.d/docker_related_config.xml
-
-RUN chmod +x /tmp/clickhouse_binary/clickhouse /entrypoint.sh \
- && /tmp/clickhouse_binary/clickhouse install --user clickhouse --group clickhouse \
- && rm -rf /tmp/clickhouse_binary \
- && mkdir -p /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /etc/clickhouse-client /docker-entrypoint-initdb.d \
- && chmod ugo+Xrw -R /var/lib/clickhouse /var/log/clickhouse-server /etc/clickhouse-server /etc/clickhouse-client \
- && clickhouse local -q "SELECT 1" >/dev/null \
- && locale-gen en_US.UTF-8
-
-LABEL org.opencontainers.image.title="ClickHouse" \
-      org.opencontainers.image.description="ClickHouse built from source" \
-      org.opencontainers.image.source="${IMAGE_SOURCE}" \
-      org.opencontainers.image.revision="${IMAGE_REVISION}" \
-      org.opencontainers.image.created="${IMAGE_CREATED}"
-
-ENV LANG=en_US.UTF-8
-ENV TZ=UTC
-ENV CLICKHOUSE_CONFIG=/etc/clickhouse-server/config.xml
-
-WORKDIR /var/lib/clickhouse
-EXPOSE 8123 9000 9009
-VOLUME /var/lib/clickhouse
-
-ENTRYPOINT ["/entrypoint.sh"]
-CMD []
+outputArtifacts:
+  - name: clickhouse-source-image
+    type: DOCKER_IMAGE
+    location: clickhouse-source-local:ci
