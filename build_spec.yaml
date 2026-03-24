@@ -20,6 +20,10 @@ steps:
       set -euxo pipefail
       git submodule sync --recursive
       git submodule update --init --recursive --jobs "${SUBMODULE_JOBS}"
+
+      # Fail early if required submodule content is missing
+      test -f contrib/sysroot/README.md
+
       IMAGE_TAG="$(echo "${OCI_PRIMARY_SOURCE_COMMIT_HASH:-$OCI_BUILD_RUN_ID}" | cut -c1-12)"
       export IMAGE_TAG
       echo "IMAGE_TAG=${IMAGE_TAG}"
@@ -38,6 +42,9 @@ steps:
       IMAGE_SOURCE="$(git config --get remote.origin.url || true)"
       IMAGE_REVISION="$(git rev-parse HEAD || true)"
       IMAGE_CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      # Sanity: ensure build context still has required submodule content
+      test -f contrib/sysroot/README.md
 
       podman system prune -af --volumes || true
 
