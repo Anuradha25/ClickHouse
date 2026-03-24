@@ -1,9 +1,9 @@
-# Keep git metadata out of build context
+# VCS / metadata
 .git
 .gitmodules
 .github
 
-# Ignore local build outputs and caches
+# Local artifacts
 build
 cmake-build-*
 out
@@ -11,20 +11,21 @@ tmp
 cache
 ccache
 **/.cache
-
-# Editor/OS files
-.vscode
-.idea
-.DS_Store
-
-# Python/node artifacts (if present in repo tooling)
 **/__pycache__
 **/*.pyc
 node_modules
 
-# Large local archives / logs
+# IDE / OS noise
+.vscode
+.idea
+.DS_Store
+
+# Archives / logs
 *.tar
 *.tar.gz
 *.tgz
 *.zip
 *.log
+
+# Very large vendored rust tree (not needed when ENABLE_RUST=OFF)
+contrib/rust_vendor
