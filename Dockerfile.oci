@@ -33,7 +33,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /src
 COPY . .
 
-# Required submodule content for ClickHouse build
 RUN test -f contrib/sysroot/README.md
 
 RUN jobs="${BUILD_JOBS}"; \
