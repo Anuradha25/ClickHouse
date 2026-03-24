@@ -42,6 +42,8 @@ steps:
       podman system prune -af --volumes || true
 
       podman build \
+        --memory=96g \
+        --memory-swap=96g \
         --format "${BUILD_FORMAT}" \
         --pull=always \
         -f Dockerfile.oci \
