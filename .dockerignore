@@ -1,9 +1,30 @@
-*
-!Dockerfile.runtime
-!build/
-!build/programs/
-!build/programs/clickhouse
-!docker/
-!docker/server/
-!docker/server/entrypoint.sh
-!docker/server/docker_related_config.xml
+# Keep git metadata out of build context
+.git
+.gitmodules
+.github
+
+# Ignore local build outputs and caches
+build
+cmake-build-*
+out
+tmp
+cache
+ccache
+**/.cache
+
+# Editor/OS files
+.vscode
+.idea
+.DS_Store
+
+# Python/node artifacts (if present in repo tooling)
+**/__pycache__
+**/*.pyc
+node_modules
+
+# Large local archives / logs
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.log
