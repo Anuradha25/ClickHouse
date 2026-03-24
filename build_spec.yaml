@@ -20,8 +20,6 @@ steps:
       set -euxo pipefail
       git submodule sync --recursive
       git submodule update --init --recursive --jobs "${SUBMODULE_JOBS}"
-
-      # Fail early if required submodule content is missing
       test -f contrib/sysroot/README.md
 
       IMAGE_TAG="$(echo "${OCI_PRIMARY_SOURCE_COMMIT_HASH:-$OCI_BUILD_RUN_ID}" | cut -c1-12)"
@@ -32,7 +30,7 @@ steps:
     name: "Install host dependencies"
     command: |
       set -euxo pipefail
-      dnf -y install git podman tar xz which
+      dnf -y install git podman tar xz which rsync
 
   - type: Command
     name: "Build ClickHouse image from source"
@@ -43,17 +41,39 @@ steps:
       IMAGE_REVISION="$(git rev-parse HEAD || true)"
       IMAGE_CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-      # Sanity: ensure build context still has required submodule content
-      test -f contrib/sysroot/README.md
-
       podman system prune -af --volumes || true
+      podman image prune -af || true
+      podman builder prune -af || true
+
+      # Stage a smaller build context to reduce overlay disk pressure.
+      CONTEXT_DIR="/tmp/ch-build-context"
+      rm -rf "${CONTEXT_DIR}"
+      mkdir -p "${CONTEXT_DIR}"
+
+      rsync -a --delete \
+        --exclude ".git" \
+        --exclude ".github" \
+        --exclude "build" \
+        --exclude "cmake-build-*" \
+        --exclude "out" \
+        --exclude "tmp" \
+        --exclude "cache" \
+        --exclude "ccache" \
+        --exclude ".vscode" \
+        --exclude ".idea" \
+        --exclude ".DS_Store" \
+        --exclude "node_modules" \
+        --exclude "contrib/rust_vendor" \
+        ./ "${CONTEXT_DIR}/"
+
+      test -f "${CONTEXT_DIR}/contrib/sysroot/README.md"
 
       podman build \
         --memory=96g \
         --memory-swap=96g \
         --format "${BUILD_FORMAT}" \
-        --pull=always \
-        -f Dockerfile.oci \
+        --no-cache \
+        -f "${CONTEXT_DIR}/Dockerfile.oci" \
         -t "${LOCAL_IMAGE_TAG}" \
         --build-arg DEBIAN_FRONTEND=noninteractive \
         --build-arg BUILD_JOBS="${BUILD_JOBS}" \
@@ -63,7 +83,7 @@ steps:
         --build-arg IMAGE_SOURCE="${IMAGE_SOURCE}" \
         --build-arg IMAGE_REVISION="${IMAGE_REVISION}" \
         --build-arg IMAGE_CREATED="${IMAGE_CREATED}" \
-        .
+        "${CONTEXT_DIR}"
 
 outputArtifacts:
   - name: clickhouse-source-image
