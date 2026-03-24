@@ -33,6 +33,33 @@ steps:
       dnf -y install git podman tar xz which rsync
 
   - type: Command
+    name: "Debug runner and podman limits"
+    command: |
+      set -euxo pipefail
+      echo "=== Host memory ==="
+      free -h || true
+      grep -E 'MemTotal|MemAvailable|SwapTotal|SwapFree' /proc/meminfo || true
+
+      echo "=== Host disk ==="
+      df -h || true
+      df -h /var/lib/containers || true
+      du -sh /var/lib/containers 2>/dev/null || true
+      du -sh /var/lib/containers/storage 2>/dev/null || true
+
+      echo "=== Podman info ==="
+      podman info || true
+
+      echo "=== Podman store ==="
+      podman system df || true
+
+      echo "=== Build cgroup limits (if set) ==="
+      cat /sys/fs/cgroup/memory.max 2>/dev/null || true
+      cat /sys/fs/cgroup/memory.current 2>/dev/null || true
+
+      echo "=== Container memory view ==="
+      podman run --rm ubuntu:24.04 bash -lc 'free -h; cat /sys/fs/cgroup/memory.max || true'
+
+  - type: Command
     name: "Build ClickHouse image from source"
     command: |
       set -euxo pipefail
@@ -45,7 +72,6 @@ steps:
       podman image prune -af || true
       podman builder prune -af || true
 
-      # Stage a smaller build context to reduce overlay disk pressure.
       CONTEXT_DIR="/tmp/ch-build-context"
       rm -rf "${CONTEXT_DIR}"
       mkdir -p "${CONTEXT_DIR}"
@@ -67,6 +93,7 @@ steps:
         ./ "${CONTEXT_DIR}/"
 
       test -f "${CONTEXT_DIR}/contrib/sysroot/README.md"
+      du -sh "${CONTEXT_DIR}" || true
 
       podman build \
         --memory=96g \
