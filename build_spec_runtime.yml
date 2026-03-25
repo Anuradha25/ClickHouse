@@ -32,7 +32,6 @@ steps:
         git \
         podman \
         cmake \
-        ninja-build \
         clang \
         lld \
         ccache \
@@ -43,6 +42,8 @@ steps:
         tar \
         xz \
         which
+      dnf -y install ninja || dnf -y install ninja-build
+      ninja --version
 
   - type: Command
     name: "Compile ClickHouse in workspace"
