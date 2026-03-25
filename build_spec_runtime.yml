@@ -1,0 +1,77 @@
+version: 0.1
+component: build
+timeoutInSeconds: 24000
+shell: bash
+failImmediatelyOnError: true
+
+env:
+  variables:
+    SUBMODULE_JOBS: "16"
+    BUILD_JOBS: "4"
+    LOCAL_IMAGE_TAG: "clickhouse-source-local:ci"
+  exportedVariables:
+    - IMAGE_TAG
+
+steps:
+  - type: Command
+    name: "Prepare source and submodules"
+    command: |
+      set -euxo pipefail
+      git submodule sync --recursive
+      git submodule update --init --recursive --jobs "${SUBMODULE_JOBS}"
+      test -f contrib/sysroot/README.md
+      IMAGE_TAG="$(echo "${OCI_PRIMARY_SOURCE_COMMIT_HASH:-$OCI_BUILD_RUN_ID}" | cut -c1-12)"
+      export IMAGE_TAG
+      echo "IMAGE_TAG=${IMAGE_TAG}"
+
+  - type: Command
+    name: "Install host build dependencies"
+    command: |
+      set -euxo pipefail
+      dnf -y install \
+        git \
+        podman \
+        cmake \
+        ninja-build \
+        clang \
+        lld \
+        ccache \
+        gawk \
+        perl \
+        pkgconfig \
+        python3 \
+        tar \
+        xz \
+        which
+
+  - type: Command
+    name: "Compile ClickHouse in workspace"
+    command: |
+      set -euxo pipefail
+      rm -rf build
+      cmake -S . -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
+        -DENABLE_TESTS=OFF \
+        -DENABLE_UTILS=OFF \
+        -DENABLE_RUST=OFF
+      ninja -C build -j "${BUILD_JOBS}" clickhouse
+      test -x build/programs/clickhouse
+
+  - type: Command
+    name: "Package runtime image"
+    command: |
+      set -euxo pipefail
+      podman system prune -af --volumes || true
+      podman build \
+        --format docker \
+        --pull=always \
+        -f Dockerfile.runtime \
+        -t "${LOCAL_IMAGE_TAG}" \
+        .
+
+outputArtifacts:
+  - name: clickhouse-source-image
+    type: DOCKER_IMAGE
+    location: clickhouse-source-local:ci
