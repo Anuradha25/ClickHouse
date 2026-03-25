@@ -7,7 +7,12 @@ ARG CLICKHOUSE_GID=101
 RUN groupadd -r clickhouse --gid="${CLICKHOUSE_GID}" \
  && useradd -r -g clickhouse --uid="${CLICKHOUSE_UID}" --home-dir=/var/lib/clickhouse --shell=/bin/bash clickhouse \
  && apt-get update \
- && apt-get install --yes --no-install-recommends busybox ca-certificates locales tzdata wget \
+ && apt-get install --yes --no-install-recommends \
+    busybox \
+    ca-certificates \
+    locales \
+    tzdata \
+    wget \
  && busybox --install -s \
  && rm -rf /var/lib/apt/lists/* /var/cache/debconf /tmp/*
 
@@ -30,5 +35,6 @@ ENV CLICKHOUSE_CONFIG=/etc/clickhouse-server/config.xml
 WORKDIR /var/lib/clickhouse
 EXPOSE 8123 9000 9009
 VOLUME /var/lib/clickhouse
+
 ENTRYPOINT ["/entrypoint.sh"]
 CMD []
