@@ -28,13 +28,20 @@ steps:
     name: "Install host build dependencies"
     command: |
       set -euxo pipefail
+      dnf -y module reset llvm-toolset || true
+      dnf -y module enable llvm-toolset:21 || true
+      dnf -y install llvm-toolset-21.0 clang llvm lld || dnf -y install clang lld
+      clang --version
+      CLANG_MAJOR="$(clang --version | sed -n '1s/.*version \([0-9][0-9]*\).*/\1/p')"
+      test -n "${CLANG_MAJOR}" && [ "${CLANG_MAJOR}" -ge 21 ]
+      
       dnf -y install \
         git \
         podman \
         cmake \
         make \
-        clang \
-        lld \
+        # clang \
+        # lld \
         ccache \
         gawk \
         perl \
